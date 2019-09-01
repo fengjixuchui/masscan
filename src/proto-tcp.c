@@ -246,7 +246,7 @@ tcpcon_set_parameter(struct TCP_ConnectionTable *tcpcon,
     if (name_equals(name, "hello-timeout")) {
         uint64_t n = parseInt(value, value_length);
         tcpcon->timeout_hello = (unsigned)n;
-        LOG(1, "TCP hello-timeout = \"%.*s\"\n", value_length, value);
+        LOG(1, "TCP hello-timeout = \"%.*s\"\n", (int)value_length, (const char *)value);
         LOG(1, "TCP hello-timeout = %u\n", (unsigned)tcpcon->timeout_hello);
         return;
     }
@@ -474,7 +474,7 @@ tcb_hash(   unsigned ip_me, unsigned port_me,
     unsigned index;
 
     /* TCB hash table uses symmetric hash, so incoming/outgoing packets
-     * get the same hash. FIXME: does this really nee to be symmetric? */
+     * get the same hash. */
     index = (unsigned)syn_cookie(   ip_me   ^ ip_them,
                                     port_me ^ port_them,
                                     ip_me   ^ ip_them,
@@ -944,15 +944,15 @@ LOGSEND(struct TCP_Control_Block *tcb, const char *what)
  ***************************************************************************/
 void
 tcpcon_send_FIN(
-    struct TCP_ConnectionTable *tcpcon,
-    unsigned ip_me, unsigned ip_them,
-    unsigned port_me, unsigned port_them,
-    uint32_t seqno_them, uint32_t ackno_them)
+                struct TCP_ConnectionTable *tcpcon,
+                unsigned ip_me, unsigned ip_them,
+                unsigned port_me, unsigned port_them,
+                uint32_t seqno_them, uint32_t ackno_them)
 {
     struct TCP_Control_Block tcb;
-
+    
     memset(&tcb, 0, sizeof(tcb));
-
+    
     tcb.ip_me = ip_me;
     tcb.ip_them = ip_them;
     tcb.port_me = (unsigned short)port_me;
@@ -961,9 +961,33 @@ tcpcon_send_FIN(
     tcb.ackno_me = seqno_them + 1;
     tcb.seqno_them = seqno_them + 1;
     tcb.ackno_them = ackno_them;
-
+    
     LOGSEND(&tcb, "peer(FIN) fake");
     tcpcon_send_packet(tcpcon, &tcb, 0x11, 0, 0, 0);
+}
+
+void
+tcpcon_send_RST(
+                struct TCP_ConnectionTable *tcpcon,
+                unsigned ip_me, unsigned ip_them,
+                unsigned port_me, unsigned port_them,
+                uint32_t seqno_them, uint32_t ackno_them)
+{
+    struct TCP_Control_Block tcb;
+    
+    memset(&tcb, 0, sizeof(tcb));
+    
+    tcb.ip_me = ip_me;
+    tcb.ip_them = ip_them;
+    tcb.port_me = (unsigned short)port_me;
+    tcb.port_them = (unsigned short)port_them;
+    tcb.seqno_me = ackno_them;
+    tcb.ackno_me = seqno_them + 1;
+    tcb.seqno_them = seqno_them + 1;
+    tcb.ackno_them = ackno_them;
+    
+    LOGSEND(&tcb, "peer(RST) fake");
+    tcpcon_send_packet(tcpcon, &tcb, 0x04, 0, 0, 0);
 }
 
 
@@ -1391,7 +1415,8 @@ tcpcon_handle(struct TCP_ConnectionTable *tcpcon,
                         tcb->seqno_me -= len;
                         LOGSEND(tcb, "peer(payload) retransmit");
                         
-                        if (tcb->payload) /* FIXME: kludge: should never be NULL< but somehow is */
+                        /* kludge: should never be NULL< but somehow is */
+                        if (tcb->payload) 
                         tcpcon_send_packet(tcpcon, tcb,
                                            0x18,
                                            tcb->payload + tcb->payload_length - len,
@@ -1437,6 +1462,12 @@ tcpcon_handle(struct TCP_ConnectionTable *tcpcon,
                     
                     LOGSEND(tcb, "app(payload)");
                     application(tcpcon, tcb, APP_RECV_PAYLOAD, payload, payload_length, secs, usecs);
+                    
+                    /* Send ack for the data */
+                    LOGSEND(tcb, "peer(ACK)");
+                    tcpcon_send_packet(tcpcon, tcb,
+                                       0x10,
+                                       0, 0, 0);
                     break;
 
             }

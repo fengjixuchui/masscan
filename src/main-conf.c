@@ -14,6 +14,7 @@
 #include "masscan.h"
 #include "masscan-version.h"
 #include "ranges.h"
+#include "range-file.h"     /* reads millions of IP addresss from a file */
 #include "string_s.h"
 #include "logger.h"
 #include "proto-banner1.h"
@@ -27,6 +28,13 @@
 #include "util-malloc.h"
 #include <ctype.h>
 #include <limits.h>
+
+#ifdef WIN32
+#include <direct.h>
+#define getcwd _getcwd
+#else
+#include <unistd.h>
+#endif
 
 #ifndef min
 #define min(a,b) ((a)<(b)?(a):(b))
@@ -326,7 +334,7 @@ masscan_save_state(struct Masscan *masscan)
 }
 
 
-
+#if 0
 /*****************************************************************************
  * Read in ranges from a file
  *
@@ -396,13 +404,15 @@ ranges_from_file(struct RangeList *ranges, const char *filename)
             i = 1;
             while (!feof(fp)) {
                 c = getc(fp);
+                if (c == EOF)
+                    break;
                 line_number += (c == '\n');
                 if (isspace(c&0xFF) || c == ',') {
                     break;
                 }
                 if (i+1 >= sizeof(address)) {
                     LOG(0, "%s:%u:%u: bad address spec: \"%.*s\"\n",
-                            filename, line_number, offset, i, address);
+                            filename, line_number, offset, (int)i, address);
                     exit(1);
                 } else
                     address[i] = (char)c;
@@ -414,7 +424,7 @@ ranges_from_file(struct RangeList *ranges, const char *filename)
             range = range_parse_ipv4(address, &offset, (unsigned)i);
             if (range.begin == 0xFFFFFFFF && range.end == 0) {
                 LOG(0, "%s:%u:%u: bad range spec: \"%.*s\"\n",
-                        filename, line_number, offset, i, address);
+                        filename, line_number, offset, (int)i, address);
                 exit(1);
             } else {
                 rangelist_add_range(ranges, range.begin, range.end);
@@ -428,6 +438,7 @@ ranges_from_file(struct RangeList *ranges, const char *filename)
      * before it can be used */
     rangelist_sort(ranges);
 }
+#endif
 
 /***************************************************************************
  ***************************************************************************/
@@ -1573,41 +1584,41 @@ struct ConfigParameter {
 };
 enum {F_NONE, F_BOOL};
 struct ConfigParameter config_parameters[] = {
-    {"resume-index",    SET_resume_index},
-    {"resume-count",    SET_resume_count},
-    {"seed",            SET_seed},
+    {"resume-index",    SET_resume_index,       0,      {0}},
+    {"resume-count",    SET_resume_count,       0,      {0}},
+    {"seed",            SET_seed,               0,      {0}},
     {"arpscan",         SET_arpscan,            F_BOOL, {"arp",0}},
-    {"randomize-hosts", SET_randomize_hosts,    F_BOOL},
-    {"rate",            SET_rate,               0, {"max-rate",0}},
-    {"shard",           SET_shard,              0, {"shards",0}},
+    {"randomize-hosts", SET_randomize_hosts,    F_BOOL, {0}},
+    {"rate",            SET_rate,               0,      {"max-rate",0}},
+    {"shard",           SET_shard,              0,      {"shards",0}},
     {"banners",         SET_banners,            F_BOOL, {"banner",0}},
     {"nobanners",       SET_nobanners,          F_BOOL, {"nobanner",0}},
-    {"retries",         SET_retries,            0, {"retry", "max-retries", "max-retry", 0}},
-    {"noreset",         SET_noreset,            F_BOOL},
-    {"nmap-payloads",   SET_nmap_payloads,      0, {"nmap-payload",0}},
-    {"nmap-service-probes",SET_nmap_service_probes, 0, {"nmap-service-probe",0}},
-    {"pcap-filename",   SET_pcap_filename,      0, {"pcap",0}},
-    {"pcap-payloads",   SET_pcap_payloads,      0, {"pcap-payload",0}},
-    {"hello",           SET_hello},
-    {"hello-file",      SET_hello_file,         0, {"hello-filename",0}},
-    {"hello-string",    SET_hello_string},
-    {"hello-timeout",   SET_hello_timeout},
-    {"min-packet",      SET_min_packet,         0, {"min-pkt",0}},
-    {"capture",         SET_capture},
-    {"SPACE",           SET_space},
-    {"output-filename", SET_output_filename,    0, {"output-file",0}},
-    {"output-format",   SET_output_format},
-    {"output-show",     SET_output_show,        0, {"output-status", "show",0}},
-    {"output-noshow",   SET_output_noshow,      0, {"noshow",0}},
+    {"retries",         SET_retries,            0,      {"retry", "max-retries", "max-retry", 0}},
+    {"noreset",         SET_noreset,            F_BOOL, {0}},
+    {"nmap-payloads",   SET_nmap_payloads,      0,      {"nmap-payload",0}},
+    {"nmap-service-probes",SET_nmap_service_probes, 0,  {"nmap-service-probe",0}},
+    {"pcap-filename",   SET_pcap_filename,      0,      {"pcap",0}},
+    {"pcap-payloads",   SET_pcap_payloads,      0,      {"pcap-payload",0}},
+    {"hello",           SET_hello,              0,      {0}},
+    {"hello-file",      SET_hello_file,         0,      {"hello-filename",0}},
+    {"hello-string",    SET_hello_string,       0,      {0}},
+    {"hello-timeout",   SET_hello_timeout,      0,      {0}},
+    {"min-packet",      SET_min_packet,         0,      {"min-pkt",0}},
+    {"capture",         SET_capture,            0,      {0}},
+    {"SPACE",           SET_space,              0,      {0}},
+    {"output-filename", SET_output_filename,    0,      {"output-file",0}},
+    {"output-format",   SET_output_format,      0,      {0}},
+    {"output-show",     SET_output_show,        0,      {"output-status", "show",0}},
+    {"output-noshow",   SET_output_noshow,      0,      {"noshow",0}},
     {"output-show-open",SET_output_show_open,   F_BOOL, {"open", "open-only", 0}},
-    {"output-append",   SET_output_append,      0, {"append-output",0}},
-    {"rotate",          SET_rotate_time,        0, {"output-rotate", "rotate-output", "rotate-time", 0}},
-    {"rotate-dir",      SET_rotate_directory,   0, {"output-rotate-dir", "rotate-directory", 0}},
-    {"rotate-offset",   SET_rotate_offset,      0, {"output-rotate-offset", 0}},
-    {"rotate-size",     SET_rotate_filesize,    0, {"output-rotate-filesize", "rotate-filesize", 0}},
-    {"stylesheet",      SET_output_stylesheet},
-    {"script",          SET_script},
-    {"SPACE",           SET_space},
+    {"output-append",   SET_output_append,      0,      {"append-output",0}},
+    {"rotate",          SET_rotate_time,        0,      {"output-rotate", "rotate-output", "rotate-time", 0}},
+    {"rotate-dir",      SET_rotate_directory,   0,      {"output-rotate-dir", "rotate-directory", 0}},
+    {"rotate-offset",   SET_rotate_offset,      0,      {"output-rotate-offset", 0}},
+    {"rotate-size",     SET_rotate_filesize,    0,      {"output-rotate-filesize", "rotate-filesize", 0}},
+    {"stylesheet",      SET_output_stylesheet,  0,      {0}},
+    {"script",          SET_script,             0,      {0}},
+    {"SPACE",           SET_space,              0,      {0}},
     {0}
 };
 
@@ -1785,6 +1796,13 @@ masscan_set_parameter(struct Masscan *masscan,
         if (masscan->op == 0)
             masscan->op = Operation_Scan;
     }
+    else if (EQUALS("oprotos", name) || EQUALS("oproto", name)) {
+        unsigned is_error = 0;
+        masscan->scan_type.oproto = 1;
+        rangelist_parse_ports(&masscan->ports, value, &is_error, Templ_Oproto_first);
+        if (masscan->op == 0)
+            masscan->op = Operation_Scan;
+    }
     else if (EQUALS("tcp-ports", name) || EQUALS("tcp-port", name)) {
         unsigned is_error = 0;
         masscan->scan_type.tcp = 1;
@@ -1931,11 +1949,21 @@ masscan_set_parameter(struct Masscan *masscan,
     } else if (EQUALS("excludefile", name)) {
         unsigned count1 = masscan->exclude_ip.count;
         unsigned count2;
+        int err;
+        const char *filename = value;
+
         LOG(1, "EXCLUDING: %s\n", value);
-        ranges_from_file(&masscan->exclude_ip, value);
+        err = rangefile_read(filename, &masscan->exclude_ip, &masscan->exclude_ipv6);
+        if (err) {
+            LOG(0, "FAIL: error reading from exclude file\n");
+            exit(1);
+        }
+
+        /* Detect if this file has made any change, otherwise don't print
+         * a message */
         count2 = masscan->exclude_ip.count;
         if (count2 - count1)
-        fprintf(stderr, "%s: excluding %u ranges from file\n",
+            fprintf(stderr, "%s: excluding %u ranges from file\n",
                 value, count2 - count1);
     } else if (EQUALS("heartbleed", name)) {
         masscan->is_heartbleed = 1;
@@ -1995,7 +2023,14 @@ masscan_set_parameter(struct Masscan *masscan,
     } else if (EQUALS("iflist", name)) {
         masscan->op = Operation_List_Adapters;
     } else if (EQUALS("includefile", name)) {
-        ranges_from_file(&masscan->targets, value);
+        int err;
+        const char *filename = value;
+
+        err = rangefile_read(filename, &masscan->targets, &masscan->targets_ipv6);
+        if (err) {
+            LOG(0, "FAIL: error reading from include file\n");
+            exit(1);
+        }
         if (masscan->op == 0)
             masscan->op = Operation_Scan;
     } else if (EQUALS("infinite", name)) {
@@ -2298,8 +2333,10 @@ masscan_load_database_files(struct Masscan *masscan)
     if (filename) {
         if (masscan->payloads.udp == NULL)
             masscan->payloads.udp = payloads_udp_create();
-    
-        payloads_read_pcap(filename, masscan->payloads.udp);
+        if (masscan->payloads.oproto == NULL)
+            masscan->payloads.oproto = payloads_udp_create();
+
+        payloads_read_pcap(filename, masscan->payloads.udp, masscan->payloads.oproto);
     }
 
     /*
@@ -2624,9 +2661,9 @@ masscan_command_line(struct Masscan *masscan, int argc, char *argv[])
                     case 'N':
                         fprintf(stderr, "nmap(%s): NULL scan not yet supported\n", argv[i]);
                         exit(1);
-                    case 'O':
-                        fprintf(stderr, "nmap(%s): IP proto scan not yet supported\n", argv[i]);
-                        exit(1);
+                    case 'O': /* Other IP protocols (not ICMP, UDP, TCP, or SCTP) */
+                        masscan->scan_type.oproto = 1;
+                        break;
                     case 'S': /* TCP SYN scan - THIS IS WHAT WE DO! */
                         masscan->scan_type.tcp = 1;
                         break;
@@ -2718,7 +2755,8 @@ masscan_command_line(struct Masscan *masscan, int argc, char *argv[])
      * If no other "scan type" found, then default to TCP
      */
     if (masscan->scan_type.udp == 0 && masscan->scan_type.sctp == 0
-        && masscan->scan_type.ping == 0 && masscan->scan_type.arp == 0)
+        && masscan->scan_type.ping == 0 && masscan->scan_type.arp == 0
+        && masscan->scan_type.oproto == 0)
         masscan->scan_type.tcp = 1;
     
     /*
@@ -2796,6 +2834,11 @@ masscan_echo(struct Masscan *masscan, FILE *fp, unsigned is_echo_all)
                 rrange.end -= Templ_UDP;
                 fprintf(fp,"U:");
                 range.begin = Templ_SCTP;
+            } else if (Templ_Oproto_first <= rrange.begin && rrange.begin <= Templ_Oproto_last) {
+                rrange.begin -= Templ_Oproto_first;
+                rrange.end -= Templ_Oproto_first;
+                fprintf(fp, "O:");
+                range.begin = Templ_Oproto_first;
             } else
                 range.begin = Templ_UDP;
             rrange.end = min(rrange.end, 65535);
@@ -2883,7 +2926,10 @@ masscan_read_config_file(struct Masscan *masscan, const char *filename)
 
     err = fopen_s(&fp, filename, "rt");
     if (err) {
+        char dir[512];
         perror(filename);
+        getcwd(dir, sizeof(dir));
+        fprintf(stderr, "cwd = %s\n", dir);
         return;
     }
 

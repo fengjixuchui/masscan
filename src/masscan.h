@@ -8,6 +8,7 @@
 #include <time.h>
 
 #include "ranges.h"
+#include "ranges6.h"
 #include "packet-queue.h"
 
 struct Adapter;
@@ -38,8 +39,6 @@ enum Operation {
  * be "--interactive", meaning that we'll print to the command-line live as
  * results come in. Only one output format can be specified, except that
  * "--interactive" can be specified alongside any of the other ones.
- * FIXME: eventually we'll support multiple file formats and "all"
- * outputing simultaneously.
  */
 enum OutputFormat {
     Output_Default      = 0x0000,
@@ -99,10 +98,11 @@ struct Masscan
     
     struct {
         unsigned tcp:1;
-        unsigned udp:1;
+        unsigned udp:1;     /* -sU */
         unsigned sctp:1;
-        unsigned ping:1; /* --ping, ICMP echo */
-        unsigned arp:1; /* --arp, local ARP scan */
+        unsigned ping:1;    /* --ping, ICMP echo */
+        unsigned arp:1;     /* --arp, local ARP scan */
+        unsigned oproto:1;  /* -sO */
     } scan_type;
     
     /**
@@ -121,7 +121,6 @@ struct Masscan
      * One or more network adapters that we'll use for scanning. Each adapter
      * should have a separate set of IP source addresses, except in the case
      * of PF_RING dnaX:Y adapters.
-     * FIXME: add support for link aggregation across adapters
      */
     struct {
         char ifname[256];
@@ -143,6 +142,7 @@ struct Masscan
      * and such, and sort the target ranges.
      */
     struct RangeList targets;
+    struct Range6List targets_ipv6;
 
     /**
      * The ports we are scanning for. The user can specify repeated ports
@@ -168,6 +168,7 @@ struct Masscan
      */
     struct RangeList exclude_ip;
     struct RangeList exclude_port;
+    struct Range6List exclude_ipv6;
 
 
     /**
@@ -372,6 +373,7 @@ struct Masscan
         char *nmap_service_probes_filename;
     
         struct PayloadsUDP *udp;
+        struct PayloadsUDP *oproto;
         struct TcpCfgPayloads *tcp;
         struct NmapServiceProbeList *probes;
     } payloads;
