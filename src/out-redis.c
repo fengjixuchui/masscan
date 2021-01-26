@@ -179,14 +179,14 @@ redis_out_close(struct Output *out, FILE *fp)
 
     UNUSEDPARM(out);
 
-    count = send((SOCKET)fd, "PING\r\n", 6, 0);
+    count = send((SOCKET)fd, "QUIT\r\n", 6, 0);
     if (count != 6) {
-        LOG(0, "redis: send(ping) failed\n");
+        LOG(0, "redis: send(quit) failed\n");
         exit(1);
     }
 
     count = recv_line((SOCKET)fd, line, sizeof(line));
-    if (count != 7 && memcmp(line, "+PONG\r\n", 7) != 0) {
+    if ((count != 5 && memcmp(line, "+OK\r\n", 5) != 0) && (count != 4 && memcmp(line, ":0\r\n", 4) != 0)){
         LOG(0, "redis: unexpected response from redis server: %s\n", line);
         exit(1);
     }
@@ -196,12 +196,12 @@ redis_out_close(struct Output *out, FILE *fp)
  ****************************************************************************/
 static void
 redis_out_status(struct Output *out, FILE *fp, time_t timestamp,
-    int status, unsigned ip, unsigned ip_proto, unsigned port, unsigned reason, unsigned ttl)
+    int status, ipaddress ip, unsigned ip_proto, unsigned port, unsigned reason, unsigned ttl)
 {
     ptrdiff_t fd = (ptrdiff_t)fp;
     char line[1024];
     int line_length;
-    char ip_string[16];
+    char ip_string[64];
     char port_string[10];
     int ip_string_length;
     int port_string_length;
@@ -209,11 +209,7 @@ redis_out_status(struct Output *out, FILE *fp, time_t timestamp,
     char values[64];
     int values_length;
 
-    ip_string_length = sprintf_s(ip_string, sizeof(ip_string), "%u.%u.%u.%u",
-        (unsigned char)(ip>>24),
-        (unsigned char)(ip>>16),
-        (unsigned char)(ip>> 8),
-        (unsigned char)(ip>> 0));
+    ip_string_length = sprintf_s(ip_string, sizeof(ip_string), "%s", ipaddress_fmt(ip).string);
     port_string_length = sprintf_s(port_string, sizeof(port_string), "%u/%s", port, name_from_ip_proto(ip_proto));
 
 /**3
@@ -299,7 +295,7 @@ myvalue
  ****************************************************************************/
 static void
 redis_out_banner(struct Output *out, FILE *fp, time_t timestamp,
-        unsigned ip, unsigned ip_proto, unsigned port,
+        ipaddress ip, unsigned ip_proto, unsigned port,
         enum ApplicationProtocol proto, unsigned ttl,
         const unsigned char *px, unsigned length)
 {
